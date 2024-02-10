@@ -2,5 +2,9 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+eth-rpc-url = "127.0.0.1:8545"
 
-# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+[fmt]
+line_length = 80
+tab_width = 4
+bracket_spacing = true
