@@ -35,3 +35,12 @@ jobs:
         run: |
           forge test -vvv
         id: test
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Run Rust tests
+        run: cargo test
