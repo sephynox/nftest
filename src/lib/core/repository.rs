@@ -1,9 +1,11 @@
 use thiserror::Error;
 
-/// RepositoryError is an enum that contains all the possible errors that 
+/// RepositoryError is an enum that contains all the possible errors that
 /// can occur when using a repository.
 #[derive(Error, Debug)]
 pub enum RepositoryError {
+    #[error("Failed to connect to database")]
+    ConnectionError,
     #[error("Failed to insert record")]
     InsertionError,
     #[error("Failed to read record")]
@@ -23,7 +25,7 @@ pub trait Repository<M> {
     /// Update a record in the repository.
     fn update(&self, key: String, value: M) -> Result<(), RepositoryError>;
     /// Delete a record from the repository.
-    fn delete(&self, key: String) -> Result<(), RepositoryError>;
+    fn delete(&self, key: String) -> Result<M, RepositoryError>;
 }
 
 #[cfg(test)]
@@ -34,13 +36,13 @@ mod tests {
 
     use super::*;
 
-    /// HashMapRepository is a simple in-memory repository that uses a 
+    /// HashMapRepository is a simple in-memory repository that uses a
     /// HashMap to store the data.
     pub struct HashMapRepository<M: Serialize + DeserializeOwned> {
         _marker: PhantomData<M>,
         map: RwLock<HashMap<String, Vec<u8>>>,
     }
-    
+
     impl<M: Serialize + DeserializeOwned> HashMapRepository<M> {
         pub fn new() -> Self {
             Self {
@@ -49,32 +51,47 @@ mod tests {
             }
         }
     }
-    
+
     impl<M: Serialize + DeserializeOwned> Repository<M> for HashMapRepository<M> {
         fn create(&self, key: String, value: M) -> Result<(), RepositoryError> {
-            let mut map = self.map.write().unwrap();
-            map.insert(key, serde_json::to_vec(&value).unwrap());
+            let mut map = self
+                .map
+                .write()
+                .map_err(|_| RepositoryError::InsertionError)?;
+            let value_vec =
+                serde_json::to_vec(&value).map_err(|_| RepositoryError::InsertionError)?;
+            map.insert(key, value_vec);
             Ok(())
         }
-    
+
         fn read(&self, key: String) -> Result<Option<M>, RepositoryError> {
-            let map = self.map.read().unwrap();
+            let map = self.map.read().map_err(|_| RepositoryError::ReadError)?;
             match map.get(&key) {
-                Some(value) => Ok(Some(serde_json::from_slice(value).unwrap())),
+                Some(value) => {
+                    let value =
+                        serde_json::from_slice(value).map_err(|_| RepositoryError::ReadError)?;
+                    Ok(Some(value))
+                }
                 None => Ok(None),
             }
         }
-    
+
         fn update(&self, key: String, value: M) -> Result<(), RepositoryError> {
-            let mut map = self.map.write().unwrap();
-            map.insert(key, serde_json::to_vec(&value).unwrap());
+            let mut map = self.map.write().map_err(|_| RepositoryError::UpdateError)?;
+            let value_vec = serde_json::to_vec(&value).map_err(|_| RepositoryError::UpdateError)?;
+            map.insert(key, value_vec);
             Ok(())
         }
-    
-        fn delete(&self, key: String) -> Result<(), RepositoryError> {
+
+        fn delete(&self, key: String) -> Result<M, RepositoryError> {
             let mut map = self.map.write().unwrap();
-            map.remove(&key);
-            Ok(())
+            match map.remove(&key) {
+                Some(value) => {
+                    Ok(serde_json::from_slice(&value)
+                        .map_err(|_| RepositoryError::DeletionError)?)
+                }
+                None => Err(RepositoryError::DeletionError),
+            }
         }
     }
 
@@ -99,7 +116,9 @@ mod tests {
         assert_eq!(repo.read(key.clone()).unwrap(), Some(new_value.clone()));
 
         // Test delete
-        assert!(repo.delete(key.clone()).is_ok());
-        assert_eq!(repo.read(key.clone()).unwrap(), None);
+        assert_eq!(repo.delete(key.clone()).unwrap(), new_value.clone());
+
+        // Test delete of non-existent key to throw error
+        assert!(repo.delete(key.clone()).is_err());
     }
 }
