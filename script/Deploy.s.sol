@@ -23,6 +23,15 @@ contract DeployScript is Script {
      */
     RewardNFT public rewardNFT;
 
+    function run() external {
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        vm.startBroadcast(deployerPrivateKey);
+
+        deploy();
+
+        vm.stopBroadcast();
+    }
+
     function setUp() public {
         /**
          * Set intended owner as the sender
@@ -30,7 +39,7 @@ contract DeployScript is Script {
         intendedOwner = msg.sender;
     }
 
-    function run() public {
+    function deploy() public {
         /**
          * Deploy Reward with DeployScript as owner
          */
@@ -53,10 +62,5 @@ contract DeployScript is Script {
          * Transfer ownership of RewardNFT to intendedOwner
          */
         rewardNFT.transferOwnership(intendedOwner);
-
-        /**
-         * Broadcast
-         */
-        vm.broadcast();
     }
 }

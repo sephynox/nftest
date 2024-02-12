@@ -13,10 +13,22 @@ contract DeployScriptTest is Test {
 
     function testRun() public {
         script.setUp();
-        script.run();
+        script.deploy();
 
-        assertEq(script.reward().owner(), address(this), "Reward contract owner is not correct");
-        assertEq(script.rewardNFT().owner(), address(this), "RewardNFT contract owner is not correct");
-        assertEq(script.reward().rewardNFT(), address(script.rewardNFT()), "Reward contract's RewardNFT is not correct");
+        assertEq(
+            script.reward().owner(),
+            address(this),
+            "Reward contract owner is not correct"
+        );
+        assertEq(
+            script.rewardNFT().owner(),
+            address(this),
+            "RewardNFT contract owner is not correct"
+        );
+        assertEq(
+            script.reward().rewardNFT(),
+            address(script.rewardNFT()),
+            "Reward contract's RewardNFT is not correct"
+        );
     }
 }
