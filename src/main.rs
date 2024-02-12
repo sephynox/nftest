@@ -1,5 +1,5 @@
-use std::error::Error;
 use std::env;
+use std::error::Error;
 
 use dotenvy::dotenv;
 
@@ -14,5 +14,5 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // create a string for our bind address
     let bind_address = format!("0.0.0.0:{api_port}");
 
-	Ok(init_server(bind_address).await?)
+    Ok(init_server(bind_address).await?)
 }
