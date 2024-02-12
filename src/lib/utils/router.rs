@@ -3,7 +3,10 @@ use axum::{
     Router,
 };
 
-use crate::services::{status::status, user::register};
+use crate::services::{
+    status::status,
+    user::{get_balance, register, reward},
+};
 
 /// Get the base path for the API.
 pub fn get_base_path() -> String {
@@ -16,6 +19,8 @@ pub fn init_router() -> Router {
     Router::new()
         .route(&format!("{base_path}/status"), get(status))
         .route(&format!("{base_path}/user"), post(register))
+        .route(&format!("{base_path}/user/:id/balance"), get(get_balance))
+        .route(&format!("{base_path}/user/:id/reward"), post(reward))
 }
 
 /// Initialize the server for the API and listen on the specified address.

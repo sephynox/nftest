@@ -1,7 +1,9 @@
+use ethers::signers::LocalWallet;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use zeroize::ZeroizeOnDrop;
 
+use crate::core::chain::get_wallet_from_secret_key;
 use crate::core::repository::{Repository, RepositoryError};
 use crate::storage::sled::{get_sled_db, SledModel};
 
@@ -13,6 +15,8 @@ pub enum UserError {
     AlreadyExists,
     #[error("Repository error")]
     RepositoryError(#[from] RepositoryError),
+    #[error("Unknown error")]
+    UnknownError(#[from] std::io::Error),
 }
 
 /// User is a struct that contains the user's id and address.
@@ -29,6 +33,21 @@ impl User {
     /// Create a new user.
     pub fn new(id: String, key: String) -> Self {
         Self { id, key }
+    }
+
+    /// Look up a user by id from the repository.
+    pub async fn from_id(id: String) -> Result<Self, UserError> {
+        let connection = get_sled_db()?;
+        let db = connection
+            .read()
+            .map_err(|_| UserError::RepositoryError(RepositoryError::ConnectionError))?;
+        let user: Result<Option<User>, RepositoryError> = db.read(id);
+
+        match user {
+            Ok(Some(user)) => Ok(user),
+            Ok(None) => Err(UserError::NotFound),
+            Err(e) => Err(UserError::RepositoryError(e)),
+        }
     }
 
     /// Save the user to the repository.
@@ -51,21 +70,14 @@ impl User {
         }
     }
 
-    /// Look up a user by id from the repository.
-    /// Note: We keep this async because it can be changed in the future
-    /// to use a different repository.
-    pub async fn from_id(id: String) -> Result<Self, UserError> {
-        let connection = get_sled_db()?;
-        let db = connection
-            .read()
-            .map_err(|_| UserError::RepositoryError(RepositoryError::ConnectionError))?;
-        let user: Result<Option<User>, RepositoryError> = db.read(id);
+    /// Get the wallet of the user from the private key.
+    pub fn get_wallet(&self) -> Result<LocalWallet, UserError> {
+        Ok(get_wallet_from_secret_key(&self.key)?)
+    }
 
-        match user {
-            Ok(Some(user)) => Ok(user),
-            Ok(None) => Err(UserError::NotFound),
-            Err(e) => Err(UserError::RepositoryError(e)),
-        }
+    /// Get the reward balance of the user.
+    pub async fn get_reward_balance(&self) -> String {
+        "0".to_string()
     }
 }
 
@@ -75,14 +87,16 @@ impl SledModel for User {}
 mod tests {
     use std::borrow::BorrowMut;
 
+    use uuid::Uuid;
+
     use super::*;
 
     const PRIVATE_KEY: &str = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
     fn setup() -> (String, User) {
-        let user_key = "user1".to_string();
+        let user_key = Uuid::new_v4().to_string();
         let user_value = User {
-            id: "user1".to_string(),
+            id: user_key.clone().to_string(),
             key: PRIVATE_KEY.to_string(),
         };
 

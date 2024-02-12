@@ -1,6 +1,8 @@
 use axum::{body::Body, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 
+use crate::{core::reward::RewardError, models::user::UserError};
+
 pub mod status;
 pub mod user;
 
@@ -24,6 +26,83 @@ impl From<String> for ErrorResponse {
             error: ErrorDetails {
                 kind: "ValidationError".into(),
                 message,
+            },
+        }
+    }
+}
+
+impl From<UserError> for ErrorResponse {
+    fn from(error: UserError) -> Self {
+        match error {
+            UserError::NotFound => ErrorResponse {
+                status: StatusCode::NOT_FOUND,
+                error: ErrorDetails {
+                    kind: "NotFoundError".into(),
+                    message: "User not found".into(),
+                },
+            },
+            UserError::AlreadyExists => ErrorResponse {
+                status: StatusCode::BAD_REQUEST,
+                error: ErrorDetails {
+                    kind: "ValidationError".into(),
+                    message: "User already exists".into(),
+                },
+            },
+            UserError::RepositoryError(e) => ErrorResponse {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                error: ErrorDetails {
+                    kind: "RepositoryError".into(),
+                    message: format!("{:?}", e),
+                },
+            },
+            UserError::UnknownError(e) => ErrorResponse {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                error: ErrorDetails {
+                    kind: "UnknownError".into(),
+                    message: format!("{:?}", e),
+                },
+            },
+        }
+    }
+}
+
+impl From<RewardError> for ErrorResponse {
+    fn from(error: RewardError) -> Self {
+        match error {
+            RewardError::NotFound => ErrorResponse {
+                status: StatusCode::NOT_FOUND,
+                error: ErrorDetails {
+                    kind: "NotFoundError".into(),
+                    message: "Reward not found".into(),
+                },
+            },
+            RewardError::AlreadyExists => ErrorResponse {
+                status: StatusCode::BAD_REQUEST,
+                error: ErrorDetails {
+                    kind: "ValidationError".into(),
+                    message: "Reward already exists".into(),
+                },
+            },
+            RewardError::RepositoryError(e) => ErrorResponse {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                error: ErrorDetails {
+                    kind: "RepositoryError".into(),
+                    message: format!("{:?}", e),
+                },
+            },
+            RewardError::MintRewardError => ErrorResponse {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                error: ErrorDetails {
+                    kind: "MintRewardError".into(),
+                    message: "Failed to mint reward".into(),
+                },
+            },
+            RewardError::UnknownError(e) => ErrorResponse {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                error: ErrorDetails {
+                    kind: "UnknownError".into(),
+                    message: format!("{:?}", e),
+                },
             },
         }
     }
