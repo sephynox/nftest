@@ -1,9 +1,14 @@
 use std::io::Error;
+use std::str::FromStr;
 
+use ethers::abi::{Abi, Address};
+use ethers::contract::Contract;
 use ethers::core::k256::ecdsa::SigningKey;
 use ethers::core::k256::SecretKey;
 use ethers::core::rand;
-use ethers::signers::{LocalWallet, Wallet};
+use ethers::providers::{Http, Provider};
+use ethers::signers::{LocalWallet, Signer, Wallet};
+use ethers::types::U256;
 use hex::FromHexError;
 
 /// Simple function to generate a new secret key
@@ -30,20 +35,66 @@ pub fn get_key_bytes(key: &str) -> Result<Vec<u8>, FromHexError> {
 
 /// Converts a secret key to a wallet
 /// TODO Improve error handling
-pub fn get_wallet_from_secret_key(secret_key: &str) -> Result<Wallet<SigningKey>, Error> {
+pub fn get_wallet_from_secret_key(secret_key: &str) -> Result<LocalWallet, Error> {
     let secret_key =
         get_key_bytes(secret_key).map_err(|e| Error::new(std::io::ErrorKind::InvalidData, e))?;
     let secret_key = SecretKey::from_slice(&secret_key)
         .map_err(|e| Error::new(std::io::ErrorKind::InvalidData, e))?;
     let local_wallet = LocalWallet::from(secret_key);
 
-    Ok(local_wallet.into())
+    Ok(local_wallet)
+}
+
+/// Get the reward balance of a wallet
+/// TODO Improve error handling
+pub async fn get_reward_balance(wallet: &Wallet<SigningKey>) -> Result<U256, Error> {
+    // Get the RPC URL from the environment
+    let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| panic!("RPC_URL must be set"));
+    // Connect to the network
+    let provider = Provider::<Http>::try_from(rpc_url).map_err(|e| {
+        Error::new(
+            std::io::ErrorKind::ConnectionRefused,
+            format!("Failed to connect to provider: {:?}", e),
+        )
+    })?;
+    // Get the wallet address
+    let wallet_address = wallet.address();
+    // Get the contract address from the environment
+    let contract_address = Address::from_str(
+        &std::env::var("REWARD_TOKEN_ADDRESS")
+            .unwrap_or_else(|_| panic!("REWARD_TOKEN_ADDRESS must be set")),
+    )
+    .map_err(|e| {
+        Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Failed to parse contract address: {:?}", e),
+        )
+    })?;
+    let json_str = include_str!("../../../out/RewardNFT.sol/RewardNFT.json");
+    // Parse the ABI
+    let abi: Abi = serde_json::from_str(json_str).unwrap();
+    // Create a new contract instance
+    let contract = Contract::new(contract_address, abi, provider.into());
+    let contract_method = contract.method("balanceOf", wallet_address).map_err(|e| {
+        Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Failed to get balance: {:?}", e),
+        )
+    })?;
+
+    // Call the balanceOf function
+    let balance: U256 = contract_method.call().await.map_err(|e| {
+        Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Failed to get balance: {:?}", e),
+        )
+    })?;
+
+    Ok(balance)
 }
 
 #[cfg(test)]
 mod tests {
-    use ethers::signers::Signer;
-
     use super::*;
 
     #[test]
