@@ -48,7 +48,8 @@ pub fn get_wallet_from_secret_key(secret_key: &str) -> Result<LocalWallet, Error
     Ok(local_wallet)
 }
 
-fn get_admin_wallet() -> Result<Wallet<SigningKey>, Error> {
+/// Get the admin wallet
+pub(crate) fn get_admin_wallet() -> Result<Wallet<SigningKey>, Error> {
     dotenv().expect(".env file not found");
 
     let admin_key =
@@ -197,12 +198,10 @@ pub fn get_reward_nft_contract(
 
 /// Get the reward balance of a wallet
 /// TODO Improve error handling
-pub async fn get_reward_balance(wallet: &Wallet<SigningKey>) -> Result<U256, Error> {
-    // Get the wallet address
-    let wallet_address = wallet.address();
+pub async fn get_reward_balance(address: Address) -> Result<U256, Error> {
     // Create a new contract instance
     let contract = get_reward_token_contract()?;
-    let contract_method = contract.method("balanceOf", wallet_address).map_err(|e| {
+    let contract_method = contract.method("balanceOf", address).map_err(|e| {
         Error::new(
             std::io::ErrorKind::InvalidData,
             format!("Failed to get balance: {:?}", e),

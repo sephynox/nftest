@@ -1,4 +1,5 @@
-use ethers::signers::LocalWallet;
+use ethers::signers::{LocalWallet, Signer};
+use ethers::types::U256;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
@@ -77,8 +78,18 @@ impl User {
     }
 
     /// Get the reward balance of the user.
-    pub async fn get_reward_balance(&self) -> String {
-        "0".to_string()
+    #[cfg(not(test))]
+    pub async fn get_reward_balance(&self) -> Result<U256, UserError> {
+        use crate::core::chain::get_reward_balance;
+
+        let wallet = self.get_wallet()?;
+
+        Ok(get_reward_balance(wallet.address()).await?)
+    }
+
+    #[cfg(test)]
+    pub async fn get_reward_balance(&self) -> Result<U256, UserError> {
+        Ok(U256::from(100))
     }
 }
 
@@ -102,6 +113,22 @@ mod tests {
         let user_key = user_value.id.to_string();
 
         (user_key, user_value)
+    }
+
+    #[tokio::test]
+    async fn test_get_wallet() {
+        // Create a mock User with a valid private key
+        let user = User::new(Uuid::new_v4(), PRIVATE_KEY.to_string());
+        let expect_wallet = get_wallet_from_secret_key(PRIVATE_KEY).unwrap();
+        // Call the get_wallet function
+        let result = user.get_wallet();
+
+        // Check that the function returned Ok
+        assert!(result.is_ok());
+
+        // Check that the returned wallet is correct
+        let wallet = result.unwrap();
+        assert_eq!(wallet.address(), expect_wallet.address());
     }
 
     #[tokio::test]

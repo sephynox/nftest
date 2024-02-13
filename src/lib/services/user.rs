@@ -10,8 +10,8 @@ use crate::{core::chain::generate_secret_key, models::user::User};
 
 use super::ErrorResponse;
 
-#[derive(Deserialize)]
-struct RegisterRequest {
+#[derive(Serialize, Deserialize)]
+pub struct RegisterRequest {
     pub id: Uuid,
 }
 
@@ -43,7 +43,7 @@ pub async fn register(
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct BalanceResult {
     pub balance: String,
 }
@@ -53,17 +53,17 @@ pub async fn get_balance(Path(id): Path<Uuid>) -> Result<Json<BalanceResult>, Er
     // Get the user from the repository
     let user = User::from_id(id.to_string()).await?;
     // Get the user's balance of rewards
-    let balance = user.get_reward_balance().await;
+    let balance = user.get_reward_balance().await?.to_string();
 
     Ok(Json(BalanceResult { balance }))
 }
 
-#[derive(Deserialize)]
-struct RewardRequest {
+#[derive(Serialize, Deserialize)]
+pub struct RewardRequest {
     pub value: u128,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct RewardResult {
     pub success: bool,
     pub id: String,
