@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::models::user::UserError;
+
 use super::repository::RepositoryError;
 
 pub trait Reward {
@@ -25,4 +27,6 @@ pub enum RewardError {
     MintRewardError,
     #[error("Unknown error")]
     UnknownError(#[from] std::io::Error),
+    #[error("User error")]
+    UserError(#[from] UserError),
 }

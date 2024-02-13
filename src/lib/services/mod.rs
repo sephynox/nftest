@@ -98,6 +98,13 @@ impl From<RewardError> for ErrorResponse {
                     message: format!("{:?}", e),
                 },
             },
+            RewardError::UserError(e) => ErrorResponse {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                error: ErrorDetails {
+                    kind: "UserError".into(),
+                    message: format!("{:?}", e),
+                },
+            },
             RewardError::MintRewardError => ErrorResponse {
                 status: StatusCode::INTERNAL_SERVER_ERROR,
                 error: ErrorDetails {

@@ -1,9 +1,16 @@
+use std::str::FromStr;
+
+use ethers::core::rand::thread_rng;
+use ethers::signers::LocalWallet;
+use ethers::signers::Signer;
 use ethers::types::U256;
+use nftest::core::chain::burn_nft_reward;
 use nftest::core::chain::get_reward_balance;
 use nftest::core::chain::get_reward_nft_contract;
 use nftest::core::chain::get_reward_token_contract;
 use nftest::core::chain::get_wallet_from_secret_key;
 use nftest::core::chain::mint_nft_reward;
+use nftest::utils::helpers::random_u256;
 
 mod helpers;
 
@@ -60,12 +67,11 @@ async fn test_mint_nft_reward() {
     helpers::deploy_contracts().await.unwrap();
 
     // Define the parameters for the mint_nft_reward function
-    let to = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-        .parse()
-        .unwrap();
-    let token_id = U256::from(1);
+    let wallet = LocalWallet::new(&mut thread_rng());
+    let to = wallet.address();
+    let token_id = random_u256();
     let url = "https://example.com".to_string();
-    let value = U256::from(1);
+    let value = U256::from(1000);
 
     // Call the mint_nft_reward function
     let result = mint_nft_reward(to, token_id, url, value).await;
@@ -74,6 +80,38 @@ async fn test_mint_nft_reward() {
     assert!(result.is_ok());
 
     // TODO Check that the NFT was minted to the correct address
+}
+
+#[tokio::test]
+async fn test_burn_nft_reward() {
+    // Deploy the contracts
+    helpers::deploy_contracts().await.unwrap();
+
+    // Define the parameters for the mint_nft_reward function
+    let wallet = LocalWallet::new(&mut thread_rng())
+        .with_chain_id(u64::from_str(&std::env::var("CHAIN_ID").unwrap()).unwrap());
+    let value: u128 = 1000000000000000000;
+    let amount = U256::from(value);
+
+    // Fund the wallet so it can pay for the transaction gas
+    helpers::fund_wallet(&wallet, amount).await.unwrap();
+
+    let to = wallet.address();
+    let token_id = random_u256();
+    let url = "https://example.com".to_string();
+    let value = U256::from(1000);
+
+    // Call the mint_nft_reward function
+    let result = mint_nft_reward(to, token_id, url, value).await;
+
+    // Assert that the function returned Ok
+    assert!(result.is_ok());
+
+    // Call the burn_nft_reward function
+    let result = burn_nft_reward(wallet, token_id).await;
+
+    // Assert that the function returned Ok
+    assert!(result.is_ok());
 }
 
 #[tokio::test]

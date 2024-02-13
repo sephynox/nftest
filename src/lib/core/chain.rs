@@ -110,8 +110,39 @@ pub async fn mint_nft_reward(
 }
 
 /// Redeem an NFT reward
-pub async fn redeem_nft_reward(token_id: U256) -> Result<String, Error> {
-    todo!()
+pub async fn burn_nft_reward(wallet: LocalWallet, token_id: U256) -> Result<String, Error> {
+    // Get the reward NFT contract
+    let contract = get_reward_nft_contract()?;
+    // Get the provider
+    let provider = get_provider()?;
+    // Create a new signer middleware
+    let client = SignerMiddleware::new(provider, wallet);
+
+    // Burn the NFT
+    let call: FunctionCall<
+        Arc<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>,
+        SignerMiddleware<Provider<Http>, Wallet<SigningKey>>,
+        ethers::types::U256,
+    > = contract
+        // Connect the contract to the provider to use the signer middleware
+        .connect(client.into())
+        // Specify the burn function of the contract
+        .method("burn", token_id)
+        .map_err(|e| {
+            Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Failed to prepare burn call: {:?}", e),
+            )
+        })?;
+
+    let tx = call.send().await.map_err(|e| {
+        Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Failed to mint reward: {:?}", e),
+        )
+    })?;
+
+    Ok(tx.tx_hash().to_string())
 }
 
 fn get_provider() -> Result<Provider<Http>, Error> {

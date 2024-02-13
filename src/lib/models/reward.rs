@@ -145,7 +145,14 @@ impl Reward for RewardNFT {
         if self.redeemed {
             Err(RewardError::AlreadyRedeemed)
         } else {
-            crate::core::chain::redeem_nft_reward(self.token_id)
+            // Get the user from the repository
+            let user = User::from_id(self.owner.to_string())
+                .await
+                .map_err(|_| RewardError::RepositoryError(RepositoryError::ConnectionError))?;
+            // Get the user's wallet
+            let wallet = user.get_wallet()?;
+
+            crate::core::chain::burn_nft_reward(wallet, self.token_id)
                 .await
                 .map_err(|_| RewardError::MintRewardError)?;
 

@@ -1,3 +1,4 @@
+use std::io::Error;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -14,6 +15,7 @@ use lazy_static::lazy_static;
 use nftest::core::chain::get_wallet_from_secret_key;
 
 lazy_static! {
+    static ref FUND_MUTEX: Mutex<()> = Mutex::new(());
     static ref DEPLOY_MUTEX: Mutex<()> = Mutex::new(());
 }
 
@@ -27,12 +29,55 @@ static REWARD_NFT_ADDRESS: OnceCell<Address> = OnceCell::const_new();
 /// socket address.
 static TEST_SERVER: OnceCell<SocketAddr> = tokio::sync::OnceCell::const_new();
 
+/// Get the reward token address.
 pub fn get_reward_token_address() -> Option<Address> {
     REWARD_ADDRESS.get().map(|address| address.clone())
 }
 
+/// Get the reward NFT address.
 pub fn get_reward_nft_address() -> Option<Address> {
     REWARD_NFT_ADDRESS.get().map(|address| address.clone())
+}
+
+/// Get the admin wallet.
+pub fn get_admin_wallet() -> Result<Wallet<SigningKey>, Error> {
+    dotenv().expect(".env file not found");
+
+    let admin_key =
+        std::env::var("PRIVATE_KEY").unwrap_or_else(|_| panic!("PRIVATE_KEY must be set"));
+    let chain_id = std::env::var("CHAIN_ID").unwrap_or_else(|_| panic!("CHAIN_ID must be set"));
+    let admin_wallet = get_wallet_from_secret_key(&admin_key)?;
+
+    Ok(admin_wallet.with_chain_id(
+        u64::from_str(&chain_id).unwrap_or_else(|_| panic!("CHAIN_ID must be a number")),
+    ))
+}
+
+/// Fund the wallet with the specified amount from the admin wallet.
+pub async fn fund_wallet(wallet: &Wallet<SigningKey>, amount: U256) -> Result<(), Error> {
+    // Lock the mutex as we can only fund a wallet one at a time
+    let _guard = FUND_MUTEX.lock().unwrap();
+
+    let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| panic!("RPC_URL must be set"));
+    let provider = Provider::<Http>::try_from(rpc_url)
+        .map_err(|_| Error::new(std::io::ErrorKind::Other, "Could not connect to RPC URL"))?;
+    let admin_wallet = get_admin_wallet()?;
+
+    // 1. Create a SignerMiddleware
+    let client = SignerMiddleware::new(provider, admin_wallet);
+
+    // 2. Create a TransactionRequest object
+    let tx = TransactionRequest::new().to(wallet.address()).value(amount);
+
+    // 3. Send the transaction with the client
+    client
+        .send_transaction(tx, None)
+        .await
+        .map_err(|_| Error::new(std::io::ErrorKind::Other, "Could not send transaction"))?
+        .await
+        .map_err(|_| Error::new(std::io::ErrorKind::Other, "Could not send transaction"))?;
+
+    Ok(())
 }
 
 /// Start the server and return the socket address. It will bind to a random,
@@ -69,6 +114,14 @@ pub async fn get_test_base_path() -> String {
     format!("http://{}{}", addr, get_base_path())
 }
 
+/// Get the provider for the test server.
+pub fn get_provider() -> Provider<Http> {
+    Provider::<Http>::try_from(
+        std::env::var("RPC_URL").unwrap_or_else(|_| panic!("RPC_URL must be set")),
+    )
+    .unwrap()
+}
+
 pub async fn deploy_contracts() -> Result<(), Box<dyn std::error::Error>> {
     // Lock the mutex to prevent multiple deployments
     let _guard = DEPLOY_MUTEX.lock();
@@ -97,11 +150,10 @@ pub async fn deploy_contracts() -> Result<(), Box<dyn std::error::Error>> {
         // )?
         // .with_chain_id(chain_id);
 
-        // Get the RPC URL from the environment
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| panic!("RPC_URL must be set"));
+        // Get the Chain ID from the environment
         let chain_id = std::env::var("CHAIN_ID").unwrap_or_else(|_| panic!("CHAIN_ID must be set"));
         // Connect to the network
-        let provider = Provider::<Http>::try_from(rpc_url)?;
+        let provider = get_provider();
 
         // Load the wallet
         let wallet: LocalWallet = get_wallet_from_secret_key(
@@ -170,7 +222,10 @@ pub async fn deploy_contracts() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ethers::providers::{Http, Provider};
+    use ethers::{
+        core::rand::thread_rng,
+        providers::{Http, Provider},
+    };
     use std::convert::TryFrom;
 
     #[tokio::test]
@@ -204,5 +259,33 @@ mod tests {
             std::env::var("REWARD_NFT_ADDRESS").unwrap(),
             format!("{:#x}", REWARD_NFT_ADDRESS.get().unwrap())
         );
+    }
+
+    #[tokio::test]
+    async fn test_fund_wallet() {
+        // Deploy the contracts
+        deploy_contracts().await.unwrap();
+
+        // Get the provider
+        let provider = get_provider();
+
+        // Create a new empty local wallet
+        let wallet = LocalWallet::new(&mut thread_rng())
+            .with_chain_id(u64::from_str(&std::env::var("CHAIN_ID").unwrap()).unwrap());
+
+        let address = wallet.address();
+
+        // Fund the wallet
+        let value: u128 = 1000000000000000000;
+        let amount = U256::from(value);
+        let result = fund_wallet(&wallet, amount).await;
+
+        // Check the result
+        assert!(result.is_ok());
+
+        let balance = provider.get_balance(address, None).await.unwrap();
+
+        // Check that the wallet balance is correct
+        assert_eq!(balance, U256::from(value));
     }
 }
