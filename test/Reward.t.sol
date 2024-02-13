@@ -40,14 +40,18 @@ contract RewardTest is Test {
         reward.setRewardNFT(newRewardNFT);
 
         /**
-         * Get the current RewardNFT
+         * Get the current minter
          */
-        address currentRewardNFT = reward.rewardNFT();
+        address currentRewardNFT = reward.minter();
 
         /**
          * Assert that the current RewardNFT is the new RewardNFT
          */
-        assertEq(currentRewardNFT, newRewardNFT, "setRewardNFT did not set the RewardNFT correctly");
+        assertEq(
+            currentRewardNFT,
+            newRewardNFT,
+            "setRewardNFT did not set the RewardNFT correctly"
+        );
     }
 
     function testMint() public {
@@ -70,7 +74,11 @@ contract RewardTest is Test {
         /**
          * Assert that the final balance is equal to the initial balance + amountToMint
          */
-        assertEq(finalBalance, initialBalance + amountToMint, "Minting did not increase balance correctly");
+        assertEq(
+            finalBalance,
+            initialBalance + amountToMint,
+            "Minting did not increase balance correctly"
+        );
     }
 
     function testOnlyOwnerCanMint() public {
@@ -115,6 +123,10 @@ contract RewardTest is Test {
         /**
          * Assert that the final balance is equal to 1000
          */
-        assertEq(finalBalance, 1000, "Minting by owner did not increase balance correctly");
+        assertEq(
+            finalBalance,
+            1000,
+            "Minting by owner did not increase balance correctly"
+        );
     }
 }

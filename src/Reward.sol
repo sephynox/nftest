@@ -8,49 +8,52 @@ import "../lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 
 /**
  * @title Reward
- * @dev Reward token which is minted by RewardNFT contract upon burn. 
+ * @dev Reward token which is minted by RewardNFT contract upon burn.
  */
 contract Reward is ERC20, ERC20Burnable, Ownable {
     /**
-     * @dev RewardNFT contract address
+     * @dev Minter contract address
      */
-    address public rewardNFT;
+    address public minter;
 
     /**
      * @dev Constructor of Reward
-     * 
+     *
      * @param initialOwner Admin of this contract
      */
-    constructor(address initialOwner) 
-        Ownable(initialOwner) 
-        ERC20("Reward", "RWD") 
-    {
+    constructor(
+        address initialOwner
+    ) Ownable(initialOwner) ERC20("Reward", "RWD") {
         /**
-         * No special logic required 
+         * No special logic required
          */
     }
 
     /**
      * @dev Modifier to check if sender is owner or the RewardNFT
      */
-    modifier onlyOwnerOrRewardNFT() {
-        require(msg.sender == owner() || msg.sender == rewardNFT, "Only owner or RewardNFT can mint");
+    modifier onlyOwnerOrMinter() {
+        require(
+            msg.sender == owner() || msg.sender == minter,
+            "Only owner or minter can mint"
+        );
         _;
     }
 
     /**
-     * @dev Set rewardNFT address
-     * 
-     * @param _rewardNFT RewardNFT contract address
+     * @dev Set minter address
+     * TODO Fix permission
+     *
+     * @param _minter RewardNFT contract address
      */
-    function setRewardNFT(address _rewardNFT) external onlyOwner {
-        rewardNFT = _rewardNFT;
+    function setRewardNFT(address _minter) external /* onlyOwner */ {
+        minter = _minter;
     }
 
     /**
      * @dev Mint reward token
      */
-    function mint(address to, uint256 amount) external onlyOwnerOrRewardNFT {
+    function mint(address to, uint256 amount) external onlyOwnerOrMinter {
         _mint(to, amount);
     }
 }

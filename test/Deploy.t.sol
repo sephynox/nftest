@@ -26,7 +26,7 @@ contract DeployScriptTest is Test {
             "RewardNFT contract owner is not correct"
         );
         assertEq(
-            script.reward().rewardNFT(),
+            script.reward().minter(),
             address(script.rewardNFT()),
             "Reward contract's RewardNFT is not correct"
         );
