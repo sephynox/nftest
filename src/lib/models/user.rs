@@ -1,6 +1,7 @@
 use ethers::signers::LocalWallet;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use uuid::Uuid;
 use zeroize::ZeroizeOnDrop;
 
 use crate::core::chain::get_wallet_from_secret_key;
@@ -24,14 +25,14 @@ pub enum UserError {
 pub struct User {
     /// User id
     #[zeroize(skip)]
-    pub id: String,
+    pub id: Uuid,
     /// Private key
     pub key: String,
 }
 
 impl User {
     /// Create a new user.
-    pub fn new(id: String, key: String) -> Self {
+    pub fn new(id: Uuid, key: String) -> Self {
         Self { id, key }
     }
 
@@ -58,12 +59,12 @@ impl User {
             .map_err(|_| UserError::RepositoryError(RepositoryError::ConnectionError))?;
 
         // Check if the user already exists
-        let existing_user: Result<Option<User>, RepositoryError> = db.read(self.id.clone());
+        let existing_user: Result<Option<User>, RepositoryError> = db.read(self.id.to_string());
 
         if existing_user.is_ok() && existing_user.unwrap().is_some() {
             Err(UserError::AlreadyExists)
         } else {
-            db.create(self.id.clone(), self.clone())
+            db.create(self.id.to_string(), self.clone())
                 .map_err(|_| UserError::RepositoryError(RepositoryError::InsertionError))?;
 
             Ok(())
@@ -94,11 +95,11 @@ mod tests {
     const PRIVATE_KEY: &str = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
     fn setup() -> (String, User) {
-        let user_key = Uuid::new_v4().to_string();
         let user_value = User {
-            id: user_key.clone().to_string(),
+            id: Uuid::new_v4(),
             key: PRIVATE_KEY.to_string(),
         };
+        let user_key = user_value.id.to_string();
 
         (user_key, user_value)
     }
