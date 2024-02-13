@@ -1,11 +1,14 @@
 use std::io::Error;
 use std::str::FromStr;
+use std::sync::Arc;
 
+use dotenvy::dotenv;
 use ethers::abi::{Abi, Address};
-use ethers::contract::Contract;
+use ethers::contract::{Contract, ContractInstance, FunctionCall};
 use ethers::core::k256::ecdsa::SigningKey;
 use ethers::core::k256::SecretKey;
 use ethers::core::rand;
+use ethers::middleware::SignerMiddleware;
 use ethers::providers::{Http, Provider};
 use ethers::signers::{LocalWallet, Signer, Wallet};
 use ethers::types::U256;
@@ -45,36 +48,129 @@ pub fn get_wallet_from_secret_key(secret_key: &str) -> Result<LocalWallet, Error
     Ok(local_wallet)
 }
 
-/// Get the reward balance of a wallet
-/// TODO Improve error handling
-pub async fn get_reward_balance(wallet: &Wallet<SigningKey>) -> Result<U256, Error> {
-    // Get the RPC URL from the environment
+fn get_admin_wallet() -> Result<Wallet<SigningKey>, Error> {
+    dotenv().expect(".env file not found");
+
+    let admin_key =
+        std::env::var("PRIVATE_KEY").unwrap_or_else(|_| panic!("PRIVATE_KEY must be set"));
+    let chain_id = std::env::var("CHAIN_ID").unwrap_or_else(|_| panic!("CHAIN_ID must be set"));
+    let admin_wallet = get_wallet_from_secret_key(&admin_key)?;
+
+    Ok(admin_wallet.with_chain_id(
+        u64::from_str(&chain_id).unwrap_or_else(|_| panic!("CHAIN_ID must be a number")),
+    ))
+}
+
+/// Mint a new NFT reward
+pub async fn mint_nft_reward(
+    to: Address,
+    token_id: U256,
+    url: String,
+    value: U256,
+) -> Result<String, Error> {
+    // Get the admin wallet
+    let wallet = get_admin_wallet()?;
+    // Get the reward NFT contract
+    let contract = get_reward_nft_contract()?;
+    // Get the provider
+    let provider = get_provider()?;
+    // Create a new signer middleware
+    let client = SignerMiddleware::new(provider, wallet);
+
+    // Mint the reward NFT
+    let call: FunctionCall<
+        Arc<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>,
+        SignerMiddleware<Provider<Http>, Wallet<SigningKey>>,
+        (
+            Address,
+            ethers::types::U256,
+            std::string::String,
+            ethers::types::U256,
+        ),
+    > = contract
+        // Connect the contract to the provider to use the signer middleware
+        .connect(client.into())
+        // Specify the safeMint function of the contract
+        .method("safeMint", (to, token_id, url, value))
+        .map_err(|e| {
+            Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Failed to prepare minting call: {:?}", e),
+            )
+        })?;
+
+    let tx = call.send().await.map_err(|e| {
+        Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Failed to mint reward: {:?}", e),
+        )
+    })?;
+
+    Ok(tx.tx_hash().to_string())
+}
+
+/// Redeem an NFT reward
+pub async fn redeem_nft_reward(token_id: U256) -> Result<String, Error> {
+    todo!()
+}
+
+fn get_provider() -> Result<Provider<Http>, Error> {
+    dotenv().expect(".env file not found");
+
     let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| panic!("RPC_URL must be set"));
-    // Connect to the network
-    let provider = Provider::<Http>::try_from(rpc_url).map_err(|e| {
+    Provider::<Http>::try_from(rpc_url).map_err(|e| {
         Error::new(
             std::io::ErrorKind::ConnectionRefused,
             format!("Failed to connect to provider: {:?}", e),
         )
-    })?;
+    })
+}
+
+/// Creates a new contract instance from the given contract JSON and address
+fn create_contract_instance(
+    contract_json: &str,
+    contract_address: Address,
+) -> Result<ContractInstance<Arc<Provider<Http>>, Provider<Http>>, Error> {
+    // Get the provider
+    let provider = get_provider()?;
+    // Load the contract ABI
+    let contract_data: serde_json::Value = serde_json::from_str(contract_json).unwrap();
+    let abi: Abi = serde_json::from_value(contract_data["abi"].clone()).unwrap();
+
+    Ok(Contract::new(contract_address, abi, provider.into()))
+}
+
+/// Get the contract address from the environment
+fn get_contract_address_from_env(env_var: &str) -> Address {
+    let contract_address_str =
+        std::env::var(env_var).unwrap_or_else(|_| panic!("{} must be set", env_var));
+    Address::from_str(&contract_address_str)
+        .unwrap_or_else(|_| panic!("{} must be a valid address", env_var))
+}
+
+/// Get the reward token contract
+pub fn get_reward_token_contract(
+) -> Result<ContractInstance<Arc<Provider<Http>>, Provider<Http>>, Error> {
+    let contract_json = include_str!("../../../out/Reward.sol/Reward.json");
+    let contract_address = get_contract_address_from_env("REWARD_TOKEN_ADDRESS");
+    create_contract_instance(contract_json, contract_address)
+}
+
+/// Get the reward NFT contract
+pub fn get_reward_nft_contract(
+) -> Result<ContractInstance<Arc<Provider<Http>>, Provider<Http>>, Error> {
+    let contract_json = include_str!("../../../out/RewardNFT.sol/RewardNFT.json");
+    let contract_address = get_contract_address_from_env("REWARD_NFT_ADDRESS");
+    create_contract_instance(contract_json, contract_address)
+}
+
+/// Get the reward balance of a wallet
+/// TODO Improve error handling
+pub async fn get_reward_balance(wallet: &Wallet<SigningKey>) -> Result<U256, Error> {
     // Get the wallet address
     let wallet_address = wallet.address();
-    // Get the contract address from the environment
-    let contract_address = Address::from_str(
-        &std::env::var("REWARD_TOKEN_ADDRESS")
-            .unwrap_or_else(|_| panic!("REWARD_TOKEN_ADDRESS must be set")),
-    )
-    .map_err(|e| {
-        Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("Failed to parse contract address: {:?}", e),
-        )
-    })?;
-    let json_str = include_str!("../../../out/RewardNFT.sol/RewardNFT.json");
-    // Parse the ABI
-    let abi: Abi = serde_json::from_str(json_str).unwrap();
     // Create a new contract instance
-    let contract = Contract::new(contract_address, abi, provider.into());
+    let contract = get_reward_token_contract()?;
     let contract_method = contract.method("balanceOf", wallet_address).map_err(|e| {
         Error::new(
             std::io::ErrorKind::InvalidData,
