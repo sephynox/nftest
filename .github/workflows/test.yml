@@ -20,6 +20,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Copy .env.example to .env
+        run: cp .env.example .env
+
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
@@ -35,6 +38,13 @@ jobs:
         run: |
           forge test -vvv
         id: test
+
+      - name: Run Anvil in background
+        run: |
+          anvil &
+          ANVIL_PID=$!
+          echo $ANVIL_PID > anvil.pid
+        id: anvil
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
