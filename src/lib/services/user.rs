@@ -1,5 +1,6 @@
 use axum::extract::Path;
 use axum::Json;
+use ethers::types::U256;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -11,7 +12,7 @@ use super::ErrorResponse;
 
 #[derive(Deserialize)]
 struct RegisterRequest {
-    pub id: String,
+    pub id: Uuid,
 }
 
 #[derive(Serialize)]
@@ -81,12 +82,14 @@ pub async fn reward(
         let value = data.value;
         // Get the user from the repository
         let user = User::from_id(id.to_string()).await?;
-        // Reward the user
-        let reward = RewardNFT::new(value);
         let user_wallet = user.get_wallet()?;
-
+        let token_value = U256::from(value);
         // Mint the reward
-        reward.mint(&user_wallet).await?;
+        let token_id = RewardNFT::mint(token_value, &user_wallet).await?;
+        // Reward the user
+        let reward = RewardNFT::new(user, token_value, token_id);
+
+        reward.save(true).await?;
 
         Ok(Json(RewardResult {
             success: true,
