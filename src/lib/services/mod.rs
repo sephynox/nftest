@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{core::reward::RewardError, models::user::UserError};
 
+pub mod reward;
 pub mod status;
 pub mod user;
 
@@ -81,6 +82,13 @@ impl From<RewardError> for ErrorResponse {
                 error: ErrorDetails {
                     kind: "ValidationError".into(),
                     message: "Reward already exists".into(),
+                },
+            },
+            RewardError::AlreadyRedeemed => ErrorResponse {
+                status: StatusCode::BAD_REQUEST,
+                error: ErrorDetails {
+                    kind: "ValidationError".into(),
+                    message: "Reward already redeemed".into(),
                 },
             },
             RewardError::RepositoryError(e) => ErrorResponse {

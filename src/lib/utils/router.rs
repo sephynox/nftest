@@ -4,6 +4,7 @@ use axum::{
 };
 
 use crate::services::{
+    reward::redeem,
     status::status,
     user::{get_balance, register, reward},
 };
@@ -21,6 +22,7 @@ pub fn init_router() -> Router {
         .route(&format!("{base_path}/user"), post(register))
         .route(&format!("{base_path}/user/:id/balance"), get(get_balance))
         .route(&format!("{base_path}/user/:id/reward"), post(reward))
+        .route(&format!("{base_path}/reward/:reward/redeem"), post(redeem))
 }
 
 /// Initialize the server for the API and listen on the specified address.
