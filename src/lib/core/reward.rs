@@ -17,6 +17,8 @@ pub enum RewardError {
     NotFound,
     #[error("Reward already exists")]
     AlreadyExists,
+    #[error("Reward already redeemed")]
+    AlreadyRedeemed,
     #[error("Repository error")]
     RepositoryError(#[from] RepositoryError),
     #[error("Failed to mint reward")]
