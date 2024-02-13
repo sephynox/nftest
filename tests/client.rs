@@ -214,6 +214,6 @@ async fn test_full_flow() {
 
     let result = result.unwrap().json::<BalanceResult>().await.unwrap();
 
-    // Check that the balance is zero for a new user
+    // Check that the balance has been updated with the redeemed reward
     assert_eq!(result.balance, value.to_string());
 }
